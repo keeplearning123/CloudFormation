@@ -1,0 +1,156 @@
+AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  VpcCIDR:
+    Description: IP range (CIDR notation) for this VPC
+    Type: String
+    Default: 10.10.0.0/16
+  PublicSubnetCIDRZone1:
+    Description: >-
+      IP range (CIDR notation) for the public subnet in the first Availability
+      Zone
+    Type: String
+    Default: 10.10.1.0/24
+  PublicSubnetCIDRZone2:
+    Description: >-
+      IP range (CIDR notation) for the public subnet in the Second Availability
+      Zone
+    Type: String
+    Default: 10.10.2.0/24
+
+  KeyPairName:
+    Description: Name of the keypair to authenticate EC2
+    Type: String
+    Default: myawskey
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: "CloudFormation_VPC"
+
+  PublicSubnetZone1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: us-east-1a
+      CidrBlock: !Ref PublicSubnetCIDRZone1
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: Public_Subnet_us_east_1a
+
+  PublicSubnetZone2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: us-east-1b
+      CidrBlock: !Ref PublicSubnetCIDRZone2
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: Public_Subnet_us_east_1b
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Public RTB
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: IGW
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  PublicRouteEntry:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteAssociateZone1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnetZone1
+
+  PublicSubnetRouteAssociateZone2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnetZone2
+
+  PublicSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: Restricting Public access to WebZone
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: Public SG
+
+  WebServerInstanceZone1:
+    Type: AWS::EC2::Instance
+    Properties:
+      AvailabilityZone: us-east-1a
+      ImageId: ami-08f3d892de259504d
+      InstanceType: t2.micro
+      SecurityGroupIds:
+        - Ref: PublicSecurityGroup
+      SubnetId:
+        Ref: PublicSubnetZone1
+      KeyName: !Sub ${KeyPairName}
+      Tags:
+        - Key: Name
+          Value: Web_Amz_Zone1
+
+  WebServerInstanceZone2:
+    Type: AWS::EC2::Instance
+    Properties:
+      AvailabilityZone: us-east-1b
+      ImageId: ami-08f3d892de259504d
+      InstanceType: t2.micro
+      SecurityGroupIds:
+        - Ref: PublicSecurityGroup
+      SubnetId:
+        Ref: PublicSubnetZone2
+      KeyName: !Sub ${KeyPairName}
+      Tags:
+        - Key: Name
+          Value: Web_Amz_Zone2
